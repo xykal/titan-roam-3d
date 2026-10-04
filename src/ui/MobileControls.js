@@ -12,9 +12,12 @@ export class MobileControls {
     };
 
     this.keys = {};
+    this.isDraggingSteer = false;
+    this.steerStartX = 0;
 
     this.initKeyboard();
     this.initTouchUI();
+    this.initSteeringSlider();
     this.initOrientationHandler();
   }
 
@@ -51,7 +54,6 @@ export class MobileControls {
       });
     }
 
-    // Tapping overlay also requests fullscreen & locks landscape
     if (overlay) {
       overlay.addEventListener('click', async (e) => {
         if (e.target !== btnLandscape && !btnLandscape.contains(e.target)) {
@@ -76,6 +78,73 @@ export class MobileControls {
         navigator.vibrate(pattern);
       } catch (e) {}
     }
+  }
+
+  initSteeringSlider() {
+    const zone = document.getElementById('touch-steer-zone');
+    const knob = document.getElementById('touch-steer-knob');
+    if (!zone || !knob) return;
+
+    let activeTouchId = null;
+
+    const handleStart = (clientX, touchId = null) => {
+      this.isDraggingSteer = true;
+      activeTouchId = touchId;
+      const rect = zone.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const maxDelta = rect.width / 2 - 20;
+
+      const deltaX = Math.max(-maxDelta, Math.min(maxDelta, clientX - centerX));
+      const steerVal = deltaX / maxDelta;
+
+      this.inputs.steer = steerVal;
+      knob.style.transform = `translateX(${deltaX}px) rotate(${steerVal * 45}deg)`;
+      this.triggerHaptic([15]);
+      this.emit();
+    };
+
+    const handleMove = (clientX) => {
+      if (!this.isDraggingSteer) return;
+      const rect = zone.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const maxDelta = rect.width / 2 - 20;
+
+      const deltaX = Math.max(-maxDelta, Math.min(maxDelta, clientX - centerX));
+      const steerVal = deltaX / maxDelta;
+
+      this.inputs.steer = steerVal;
+      knob.style.transform = `translateX(${deltaX}px) rotate(${steerVal * 45}deg)`;
+      this.emit();
+    };
+
+    const handleEnd = () => {
+      this.isDraggingSteer = false;
+      activeTouchId = null;
+      this.inputs.steer = 0;
+      knob.style.transform = `translateX(0px) rotate(0deg)`;
+      this.emit();
+    };
+
+    // Pointer / Touch events
+    zone.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      handleStart(e.clientX);
+    });
+
+    window.addEventListener('pointermove', (e) => {
+      if (this.isDraggingSteer) {
+        e.preventDefault();
+        handleMove(e.clientX);
+      }
+    });
+
+    window.addEventListener('pointerup', () => {
+      if (this.isDraggingSteer) handleEnd();
+    });
+
+    window.addEventListener('pointercancel', () => {
+      if (this.isDraggingSteer) handleEnd();
+    });
   }
 
   initTouchUI() {
