@@ -5,76 +5,143 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="theme-color" content="#0a0c12" />
+  <meta name="theme-color" content="#08090d" />
   <title>TITAN ROAM: 3D Monster Truck Open World</title>
   <link rel="stylesheet" href="./src/style.css" />
 </head>
 <body>
-  <!-- 3D Canvas Container -->
+  <!-- 3D Canvas -->
   <div id="game-container"></div>
 
   <!-- Loading Screen -->
   <div id="loading-screen">
     <div class="loader-content">
-      <div class="loader-logo">🔥 TITAN ROAM 3D 🔥</div>
-      <div class="loader-sub">3D Monster Truck World Exploration</div>
+      <div class="loader-logo">
+        <svg class="logo-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1 .4-1 1v7c0 .6.4 1 1 1h2"/>
+          <circle cx="7" cy="17" r="3"/>
+          <path d="M10 17h4"/>
+          <circle cx="17" cy="17" r="3"/>
+        </svg>
+        <span>TITAN ROAM 3D</span>
+      </div>
+      <div class="loader-sub">World Offroad Exploration & Stunts</div>
       <div class="loader-bar-bg">
         <div class="loader-bar-fill"></div>
       </div>
-      <div class="loader-tip">Menyiapkan Mesh, Fisika 3D, Cahaya & Suara V8 Engine...</div>
+      <div class="loader-tip">Memuat Mesh 3D & Fisika Suspensi...</div>
     </div>
   </div>
 
-  <!-- Orientation Lock Overlay (Mobile Portrait) -->
+  <!-- Animated Landscape Orientation Lock Overlay -->
   <div id="orientation-overlay" style="display: none;">
     <div class="orientation-box">
-      <div class="rotate-icon">📱 ➔ 🔄 ➔ 📲</div>
-      <h2>MODE LANDSCAPE DIREKOMENDASIKAN</h2>
-      <p>Game ini dirancang khusus untuk layar Landscape & Layar Penuh (Fullscreen) untuk kontrol maksimal!</p>
+      <!-- Animated Smartphone 3D Rotation SVG -->
+      <div class="phone-rotate-anim">
+        <svg class="phone-svg" viewBox="0 0 100 100" width="100" height="100">
+          <!-- Curved rotation arrows -->
+          <path class="anim-arrow" d="M 20 50 A 30 30 0 0 1 80 50" fill="none" stroke="#00f0ff" stroke-width="3" stroke-dasharray="6,4" stroke-linecap="round"/>
+          <polygon points="82,45 88,54 78,54" fill="#00f0ff" />
+          
+          <!-- Smartphone body -->
+          <g class="anim-phone-body">
+            <rect x="35" y="20" width="30" height="60" rx="5" ry="5" fill="#141926" stroke="#00f0ff" stroke-width="2.5"/>
+            <!-- Screen -->
+            <rect x="38" y="26" width="24" height="48" rx="2" fill="#00f0ff" opacity="0.25"/>
+            <!-- Notch & Home Indicator -->
+            <line x1="46" y1="23" x2="54" y2="23" stroke="#00f0ff" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="47" y1="76" x2="53" y2="76" stroke="#00f0ff" stroke-width="1.5" stroke-linecap="round"/>
+          </g>
+        </svg>
+      </div>
+
+      <h2>PUTAR HP KE MODE LANDSCAPE</h2>
+      <p>Game ini dioptimalkan khusus untuk layar <strong>Landscape & Layar Penuh</strong> demi performa 60 FPS dan kontrol terbaik.</p>
+      
       <button id="btn-lock-landscape" class="btn-primary">
-        <span>🔄</span> KUNCI LANDSCAPE & FULLSCREEN
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+        </svg>
+        <span>KUNCI LANDSCAPE & FULLSCREEN</span>
       </button>
     </div>
   </div>
 
   <!-- HUD Overlay -->
   <div id="hud-layer">
-    <!-- Top Bar Controls -->
+    <!-- Top Action Bar -->
     <div class="hud-top-bar">
       <div class="hud-top-left">
         <button id="btn-garage" class="btn-hud" title="Ganti Mobil">
-          <span class="icon">🏎️</span>
-          <span class="label">GARAGE</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <span class="label">GARASI</span>
         </button>
+
         <button id="btn-cam" class="btn-hud" title="Ganti Kamera">
-          <span class="icon">📹</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
           <span class="label">CAM</span>
         </button>
+
         <button id="btn-unflip" class="btn-hud" title="Tegakkan Mobil">
-          <span class="icon">🔄</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
           <span class="label">UNFLIP</span>
         </button>
-        <button id="btn-reset" class="btn-hud" title="Reset Arena">
-          <span class="icon">🚩</span>
+
+        <button id="btn-reset" class="btn-hud" title="Reset Posisi">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+            <line x1="4" y1="22" x2="4" y2="15"/>
+          </svg>
           <span class="label">RESET</span>
         </button>
       </div>
 
       <!-- Star Collectibles Progress -->
       <div class="hud-star-badge">
-        <span class="star-icon">⭐</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="#ffd000" stroke="#ffd000" stroke-width="1">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
         <span id="hud-star-count">0 / 20</span>
       </div>
 
       <div class="hud-top-right">
+        <!-- Quality Switcher (60fps FAST vs ULTRA HIGH) -->
+        <button id="btn-quality" class="btn-hud" title="Kualitas Grafis (60 FPS)">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          <span id="quality-badge" class="label">ULTRA</span>
+        </button>
+
         <button id="btn-daynight" class="btn-hud" title="Siang / Malam">
-          <span class="icon">🌗</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+          </svg>
         </button>
+
         <button id="btn-audio" class="btn-hud" title="Suara">
-          <span id="audio-icon" class="icon">🔊</span>
+          <span id="audio-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+            </svg>
+          </span>
         </button>
+
         <button id="btn-fullscreen" class="btn-hud" title="Fullscreen">
-          <span class="icon">⛶</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+          </svg>
         </button>
       </div>
     </div>
@@ -85,13 +152,13 @@
       <div id="hud-stunt-desc" class="stunt-desc">+500 PTS</div>
     </div>
 
-    <!-- Minimap Radar Top Right (below header) -->
+    <!-- Minimap Radar (Vector frame) -->
     <div class="hud-radar-box">
-      <canvas id="hud-radar" width="110" height="110"></canvas>
-      <div class="radar-tag">RADAR 3D</div>
+      <canvas id="hud-radar" width="100" height="100"></canvas>
+      <div class="radar-tag">RADAR GPS</div>
     </div>
 
-    <!-- Center Bottom Gauges (Speedometer & RPM) -->
+    <!-- Center Bottom Gauges -->
     <div class="hud-center-gauges">
       <div class="speedo-container">
         <div class="speedo-main">
@@ -103,7 +170,6 @@
         </div>
       </div>
 
-      <!-- RPM Bar -->
       <div class="rpm-wrapper">
         <div class="rpm-bar-bg">
           <div id="hud-rpm-fill" class="rpm-bar-fill"></div>
@@ -115,9 +181,13 @@
         </div>
       </div>
 
-      <!-- Nitro Fuel Gauge -->
       <div class="nitro-wrapper">
-        <div class="nitro-label">⚡ NITRO BOOST</div>
+        <div class="nitro-label">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+          NITRO BOOST
+        </div>
         <div class="nitro-bar-bg">
           <div id="hud-nitro-fill" class="nitro-bar-fill"></div>
         </div>
@@ -126,22 +196,26 @@
 
     <!-- Mobile Touch Controls Layout -->
     <div class="touch-controls-layer">
-      <!-- Left Controls: Steering & Horn -->
+      <!-- Left Controls: Steer Buttons & Horn -->
       <div class="touch-left-cluster">
         <div class="steer-buttons">
           <button id="touch-left" class="touch-btn touch-btn-steer" aria-label="Steer Left">
-            <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
-              <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
           <button id="touch-right" class="touch-btn touch-btn-steer" aria-label="Steer Right">
-            <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor">
-              <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+            <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
         </div>
-        <button id="touch-horn" class="touch-btn touch-btn-horn" aria-label="Horn">
-          📢
+        
+        <button id="touch-horn" class="touch-btn touch-btn-horn" aria-label="Klakson">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
         </button>
       </div>
 
@@ -149,19 +223,35 @@
       <div class="touch-right-cluster">
         <div class="pedals-upper">
           <button id="touch-nitro" class="touch-btn touch-btn-nitro" aria-label="Nitro Boost">
-            <span class="nitro-flame">🔥</span>
+            <svg class="icon-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+            </svg>
             <span class="pedal-text">NITRO</span>
           </button>
+
           <button id="touch-handbrake" class="touch-btn touch-btn-drift" aria-label="Handbrake Drift">
-            <span class="drift-icon">💨</span>
+            <svg class="icon-svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 8v4l3 3"/>
+            </svg>
             <span class="pedal-text">DRIFT</span>
           </button>
         </div>
+
         <div class="pedals-lower">
-          <button id="touch-brake" class="touch-btn touch-btn-brake" aria-label="Brake Reverse">
-            <span class="pedal-text">BRAKE<br/>REV</span>
+          <button id="touch-brake" class="touch-btn touch-btn-brake" aria-label="Rem / Mundur">
+            <svg class="icon-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <polyline points="7 13 12 18 17 13"/>
+              <polyline points="7 6 12 11 17 6"/>
+            </svg>
+            <span class="pedal-text">REM</span>
           </button>
-          <button id="touch-gas" class="touch-btn touch-btn-gas" aria-label="Gas Throttle">
+
+          <button id="touch-gas" class="touch-btn touch-btn-gas" aria-label="Gas / Maju">
+            <svg class="icon-svg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+              <polyline points="17 11 12 6 7 11"/>
+              <polyline points="17 18 12 13 7 18"/>
+            </svg>
             <span class="pedal-text">GAS</span>
           </button>
         </div>
@@ -173,18 +263,30 @@
   <div id="garage-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h2>🛠️ TITAN GARAGE - PILIH MONSTER VEHICLE</h2>
+        <div class="modal-title">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#00f0ff" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          <h2>PILIH KENDARAAN OFFROAD</h2>
+        </div>
         <button id="btn-close-garage" class="modal-close">&times;</button>
       </div>
+
       <div class="vehicle-grid">
         <!-- Vehicle 1: Titan 4x4 -->
         <div class="vehicle-card" data-vehicle="titan">
           <div class="v-badge red">MONSTER TRUCK</div>
           <div class="v-title">TITAN 4x4 BEAST</div>
-          <div class="v-img-preview">🛻</div>
+          <div class="v-icon-box">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#ff3b30" stroke-width="1.8">
+              <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1 .4-1 1v7c0 .6.4 1 1 1h2"/>
+              <circle cx="7" cy="17" r="3"/>
+              <circle cx="17" cy="17" r="3"/>
+            </svg>
+          </div>
           <div class="v-stats">
-            <div class="v-stat"><span>Bounce & Suspension:</span> <strong>MAX</strong></div>
-            <div class="v-stat"><span>Torque / Climbing:</span> <strong>95%</strong></div>
+            <div class="v-stat"><span>Suspensi & Bounce:</span> <strong>MAKSIMAL</strong></div>
+            <div class="v-stat"><span>Torsi Tanjakan:</span> <strong>95%</strong></div>
             <div class="v-stat"><span>Top Speed:</span> <strong>140 KM/H</strong></div>
           </div>
           <button class="btn-select">PILIH MOBIL INI</button>
@@ -192,12 +294,20 @@
 
         <!-- Vehicle 2: Colossus 6x6 -->
         <div class="vehicle-card" data-vehicle="colossus">
-          <div class="v-badge blue">6x6 HEAVY HAULER</div>
-          <div class="v-title">COLOSSUS 6x6 RIG</div>
-          <div class="v-img-preview">🚛</div>
+          <div class="v-badge blue">6x6 HEAVY RIG</div>
+          <div class="v-title">COLOSSUS 6x6</div>
+          <div class="v-icon-box">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#00f0ff" stroke-width="1.8">
+              <rect x="1" y="3" width="15" height="13"/>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/>
+              <circle cx="5.5" cy="18.5" r="2.5"/>
+              <circle cx="12.5" cy="18.5" r="2.5"/>
+              <circle cx="18.5" cy="18.5" r="2.5"/>
+            </svg>
+          </div>
           <div class="v-stats">
-            <div class="v-stat"><span>Bounce & Suspension:</span> <strong>85%</strong></div>
-            <div class="v-stat"><span>Torque / Climbing:</span> <strong>MAX (100%)</strong></div>
+            <div class="v-stat"><span>Stabilitas & Beban:</span> <strong>MAKSIMAL</strong></div>
+            <div class="v-stat"><span>Torsi 6 Roda:</span> <strong>100%</strong></div>
             <div class="v-stat"><span>Top Speed:</span> <strong>110 KM/H</strong></div>
           </div>
           <button class="btn-select">PILIH MOBIL INI</button>
@@ -207,10 +317,16 @@
         <div class="vehicle-card" data-vehicle="viper">
           <div class="v-badge orange">TROPHY RACER</div>
           <div class="v-title">DUNE VIPER BUGGY</div>
-          <div class="v-img-preview">🏎️</div>
+          <div class="v-icon-box">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#ff9900" stroke-width="1.8">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+              <polyline points="2 17 12 22 22 17"/>
+              <polyline points="2 12 12 17 22 12"/>
+            </svg>
+          </div>
           <div class="v-stats">
-            <div class="v-stat"><span>Drift & Agility:</span> <strong>MAX</strong></div>
-            <div class="v-stat"><span>Acceleration:</span> <strong>98%</strong></div>
+            <div class="v-stat"><span>Drifting & Kelincahan:</span> <strong>MAKSIMAL</strong></div>
+            <div class="v-stat"><span>Akselerasi Turbo:</span> <strong>98%</strong></div>
             <div class="v-stat"><span>Top Speed:</span> <strong>180 KM/H</strong></div>
           </div>
           <button class="btn-select">PILIH MOBIL INI</button>

@@ -11,7 +11,6 @@ export class MobileControls {
       nitro: false,
     };
 
-    // Keyboard state
     this.keys = {};
 
     this.initKeyboard();
@@ -38,15 +37,35 @@ export class MobileControls {
       btnLandscape.addEventListener('click', async () => {
         try {
           if (!document.fullscreenElement) {
-            await document.documentElement.requestFullscreen().catch(() => {});
+            if (document.documentElement.requestFullscreen) {
+              await document.documentElement.requestFullscreen();
+            } else if (document.documentElement.webkitRequestFullscreen) {
+              await document.documentElement.webkitRequestFullscreen();
+            }
           }
           if (screen.orientation && screen.orientation.lock) {
             await screen.orientation.lock('landscape').catch(() => {});
           }
-        } catch (e) {
-          console.log('Orientation lock note:', e);
-        }
+        } catch (e) {}
         checkOrientation();
+      });
+    }
+
+    // Tapping overlay also requests fullscreen & locks landscape
+    if (overlay) {
+      overlay.addEventListener('click', async (e) => {
+        if (e.target !== btnLandscape && !btnLandscape.contains(e.target)) {
+          try {
+            if (!document.fullscreenElement) {
+              if (document.documentElement.requestFullscreen) {
+                await document.documentElement.requestFullscreen();
+              }
+            }
+            if (screen.orientation && screen.orientation.lock) {
+              await screen.orientation.lock('landscape').catch(() => {});
+            }
+          } catch (e) {}
+        }
       });
     }
   }
@@ -60,7 +79,6 @@ export class MobileControls {
   }
 
   initTouchUI() {
-    // Left & Right Steering Buttons
     const btnLeft = document.getElementById('touch-left');
     const btnRight = document.getElementById('touch-right');
     const btnGas = document.getElementById('touch-gas');
@@ -105,37 +123,36 @@ export class MobileControls {
       btnGas,
       () => { this.inputs.throttle = 1; },
       () => { this.inputs.throttle = 0; },
-      [30]
+      [25]
     );
 
     bindButton(
       btnBrake,
       () => { this.inputs.brake = 1; },
       () => { this.inputs.brake = 0; },
-      [25]
+      [20]
     );
 
     bindButton(
       btnNitro,
       () => { this.inputs.nitro = true; },
       () => { this.inputs.nitro = false; },
-      [40, 20, 40]
+      [35, 15, 35]
     );
 
     bindButton(
       btnHandbrake,
       () => { this.inputs.handbrake = true; },
       () => { this.inputs.handbrake = false; },
-      [30]
+      [25]
     );
 
-    // Quick Action Bar Buttons
     const bindAction = (id, action) => {
       const el = document.getElementById(id);
       if (el) {
         el.addEventListener('click', (e) => {
           e.preventDefault();
-          this.triggerHaptic([30]);
+          this.triggerHaptic([25]);
           if (this.onAction) this.onAction(action);
         });
       }
@@ -148,6 +165,7 @@ export class MobileControls {
     bindAction('btn-daynight', 'TOGGLE_DAYNIGHT');
     bindAction('btn-audio', 'TOGGLE_AUDIO');
     bindAction('btn-fullscreen', 'TOGGLE_FULLSCREEN');
+    bindAction('btn-quality', 'TOGGLE_QUALITY');
     bindAction('touch-horn', 'PLAY_HORN');
   }
 
@@ -163,6 +181,7 @@ export class MobileControls {
       if (e.code === 'KeyN') if (this.onAction) this.onAction('TOGGLE_DAYNIGHT');
       if (e.code === 'KeyF') if (this.onAction) this.onAction('TOGGLE_FULLSCREEN');
       if (e.code === 'KeyM') if (this.onAction) this.onAction('TOGGLE_AUDIO');
+      if (e.code === 'KeyQ') if (this.onAction) this.onAction('TOGGLE_QUALITY');
     });
 
     window.addEventListener('keyup', (e) => {
@@ -172,7 +191,6 @@ export class MobileControls {
   }
 
   processKeyboard() {
-    // Only override if touch inputs are 0
     let kThrottle = 0;
     let kBrake = 0;
     let kSteer = 0;

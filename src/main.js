@@ -12,21 +12,27 @@ class TitanGame {
     this.container = document.getElementById('game-container');
     this.currentVehicleType = 'titan';
     this.isNight = false;
-    this.camModeIndex = 0; // 0: Chase, 1: Close, 2: Hood, 3: Orbit
+    this.camModeIndex = 0;
     this.cameraModes = ['CHASE', 'ACTION', 'HOOD', 'ORBIT'];
+    this.isPaused = false;
+    this.graphicsQuality = 'HIGH'; // 'HIGH' or 'FAST'
 
     this.initGraphics();
     this.soundEngine = new SoundEngine();
     this.particleSystem = new ParticleSystem(this.scene);
     this.terrainManager = new TerrainManager(this.scene);
 
-    this.hud = new HUD((vType) => this.switchVehicle(vType));
+    this.hud = new HUD(
+      (vType) => this.switchVehicle(vType),
+      () => this.toggleGraphicsQuality()
+    );
+
     this.spawnVehicle(this.currentVehicleType);
 
     this.controls = new MobileControls(
       (th, br, st, hb, ni) => {
         this.soundEngine.ensureContext();
-        if (this.controller) {
+        if (this.controller && !this.isPaused) {
           this.controller.setInputs(th, br, st, hb, ni);
         }
       },
@@ -39,14 +45,18 @@ class TitanGame {
     this.camShake = 0;
 
     window.addEventListener('resize', () => this.onResize());
+    window.addEventListener('orientationchange', () => this.checkOrientationState());
+    this.checkOrientationState();
 
-    // Hide loading screen
+    // Instant smooth loader dismiss
     const loader = document.getElementById('loading-screen');
     if (loader) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         loader.style.opacity = '0';
-        setTimeout(() => loader.style.display = 'none', 600);
-      }, 500);
+        setTimeout(() => {
+          loader.style.display = 'none';
+        }, 300);
+      });
     }
 
     this.animate();
@@ -54,17 +64,57 @@ class TitanGame {
 
   initGraphics() {
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.2, 1200);
+    this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.3, 1000);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // Optimized WebGLRenderer for mobile performance
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: window.innerWidth > 900,
+      powerPreference: 'high-performance',
+      precision: 'mediump',
+      stencil: false,
+    });
+
+    const isMobile = window.innerWidth < 800 || navigator.userAgent.includes('Mobi');
+    const pixelRatio = isMobile ? Math.min(window.devicePixelRatio, 1.25) : Math.min(window.devicePixelRatio, 2);
+
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(pixelRatio);
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
+    this.renderer.toneMappingExposure = 1.05;
 
     this.container.appendChild(this.renderer.domElement);
+  }
+
+  checkOrientationState() {
+    const isPortrait = window.innerHeight > window.innerWidth;
+    const overlay = document.getElementById('orientation-overlay');
+
+    if (isPortrait) {
+      this.isPaused = true;
+      if (overlay) overlay.style.display = 'flex';
+    } else {
+      this.isPaused = false;
+      if (overlay) overlay.style.display = 'none';
+      this.onResize();
+    }
+  }
+
+  toggleGraphicsQuality() {
+    if (this.graphicsQuality === 'HIGH') {
+      this.graphicsQuality = 'FAST';
+      this.renderer.shadowMap.enabled = false;
+      this.renderer.setPixelRatio(1.0);
+      this.hud.showStuntAlert('MODE PERFORMA', '60 FPS (Shadow Off)');
+    } else {
+      this.graphicsQuality = 'HIGH';
+      this.renderer.shadowMap.enabled = true;
+      const isMobile = window.innerWidth < 800;
+      this.renderer.setPixelRatio(isMobile ? 1.25 : 1.75);
+      this.hud.showStuntAlert('MODE GRAFIK', 'ULTRA HIGH (Shadow On)');
+    }
+    this.hud.updateQualityBadge(this.graphicsQuality);
   }
 
   spawnVehicle(type) {
@@ -110,18 +160,32 @@ class TitanGame {
       this.hud.updateAudioIcon(isMuted);
       this.hud.showStuntAlert('AUDIO', isMuted ? 'SOUND MUTED' : 'SOUND ENABLED');
     } else if (action === 'TOGGLE_FULLSCREEN') {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch(() => {});
-        if (screen.orientation && screen.orientation.lock) {
-          screen.orientation.lock('landscape').catch(() => {});
-        }
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
+      this.triggerFullscreen();
     } else if (action === 'PLAY_HORN') {
       this.soundEngine.playHorn();
       this.hud.showStuntAlert('AIR HORN', 'HONK HONK!');
+    } else if (action === 'TOGGLE_QUALITY') {
+      this.toggleGraphicsQuality();
     }
+  }
+
+  async triggerFullscreen() {
+    try {
+      if (!document.fullscreenElement) {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+          await document.documentElement.webkitRequestFullscreen();
+        }
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape').catch(() => {});
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (e) {}
   }
 
   updateCamera(dt) {
@@ -130,44 +194,36 @@ class TitanGame {
     const carPos = this.controller.pos;
     const carQuat = this.controller.quat;
     const forward = new THREE.Vector3(0, 0, 1).applyQuaternion(carQuat).normalize();
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(carQuat).normalize();
     const speed = this.controller.getSpeedKmh();
 
-    // Dynamic FOV with speed / Nitro
-    const targetFov = 65 + (Math.abs(speed) / 180) * 20 + (this.controller.nitro ? 12 : 0);
+    const targetFov = 65 + (Math.abs(speed) / 180) * 16 + (this.controller.nitro ? 10 : 0);
     this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, dt * 5);
     this.camera.updateProjectionMatrix();
 
     let desiredPos = new THREE.Vector3();
-    let lookTarget = carPos.clone().add(new THREE.Vector3(0, 1.6, 0));
+    let lookTarget = carPos.clone().add(new THREE.Vector3(0, 1.5, 0));
 
     if (this.camModeIndex === 0) {
-      // 0: Dynamic Chase Cam
-      const dist = 7.5 + (Math.abs(speed) / 180) * 2.5;
+      const dist = 7.5 + (Math.abs(speed) / 180) * 2.0;
       const height = 3.2;
       desiredPos = carPos.clone().sub(forward.clone().multiplyScalar(dist)).add(new THREE.Vector3(0, height, 0));
     } else if (this.camModeIndex === 1) {
-      // 1: Close Action Cam
-      desiredPos = carPos.clone().sub(forward.clone().multiplyScalar(5.0)).add(new THREE.Vector3(0, 2.0, 0));
+      desiredPos = carPos.clone().sub(forward.clone().multiplyScalar(4.8)).add(new THREE.Vector3(0, 1.9, 0));
     } else if (this.camModeIndex === 2) {
-      // 2: Hood / Blower Cam
-      desiredPos = carPos.clone().add(forward.clone().multiplyScalar(0.8)).add(new THREE.Vector3(0, 2.2, 0));
+      desiredPos = carPos.clone().add(forward.clone().multiplyScalar(0.8)).add(new THREE.Vector3(0, 2.1, 0));
       lookTarget = desiredPos.clone().add(forward.clone().multiplyScalar(20));
     } else if (this.camModeIndex === 3) {
-      // 3: Heli Orbit Cam
       const angle = performance.now() * 0.0006;
-      desiredPos = carPos.clone().add(new THREE.Vector3(Math.cos(angle) * 12, 6, Math.sin(angle) * 12));
+      desiredPos = carPos.clone().add(new THREE.Vector3(Math.cos(angle) * 11, 5.5, Math.sin(angle) * 11));
     }
 
-    // Camera smoothing
-    const lerpSpeed = this.camModeIndex === 2 ? 25 : 8;
+    const lerpSpeed = this.camModeIndex === 2 ? 25 : 9;
     this.cameraPos.lerp(desiredPos, dt * lerpSpeed);
     this.cameraTarget.lerp(lookTarget, dt * (lerpSpeed + 2));
 
     this.camera.position.copy(this.cameraPos);
     this.camera.lookAt(this.cameraTarget);
 
-    // Camera shake on impacts
     if (this.camShake > 0) {
       this.camera.position.x += (Math.random() - 0.5) * this.camShake;
       this.camera.position.y += (Math.random() - 0.5) * this.camShake;
@@ -178,17 +234,17 @@ class TitanGame {
   animate() {
     requestAnimationFrame(() => this.animate());
 
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    if (this.isPaused) return;
 
-    // 1. Update Vehicle Physics
+    const dt = Math.min(this.clock.getDelta(), 0.04);
+
     if (this.controller) {
       this.controller.update(dt, (stunt) => {
         this.hud.showStuntAlert(stunt.name, `AIR: ${stunt.airTime}s  DIST: ${stunt.distance}m`, stunt.points);
-        this.camShake = 0.4;
+        this.camShake = 0.35;
       });
     }
 
-    // 2. Update World, Props & Collectibles
     this.terrainManager.update(
       dt,
       this.controller.pos,
@@ -200,28 +256,23 @@ class TitanGame {
           this.hud.showStuntAlert('GOLD STAR COLLECTED!', `STARS: ${data.count} / ${data.total}`, 500);
         } else if (event === 'SPEED_TRAP') {
           this.hud.showStuntAlert(data.name, `RADAR FLASH: ${data.speed} KM/H (BEST: ${data.record})`);
-          this.camShake = 0.25;
+          this.camShake = 0.2;
         } else if (event === 'TNT_EXPLODED') {
           this.hud.showStuntAlert('TNT BLAST!', 'EXPLOSIVE HIT +250 PTS', 250);
-          this.camShake = 0.6;
+          this.camShake = 0.5;
         } else if (event === 'CRATE_SMASHED') {
           this.hud.showStuntAlert('CRUSHED CRATE!', '+50 PTS', 50);
         }
       }
     );
 
-    // 3. Update Particles
     this.particleSystem.update(dt);
-
-    // 4. Update Camera
     this.updateCamera(dt);
 
-    // 5. Update HUD UI
     if (this.controller) {
       this.hud.update(this.controller, this.terrainManager);
     }
 
-    // 6. Render Frame
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -229,11 +280,14 @@ class TitanGame {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    const isMobile = window.innerWidth < 800;
+    this.renderer.setPixelRatio(isMobile ? 1.25 : 1.75);
+
+    this.checkOrientationState();
   }
 }
 
-// Start Game when DOM ready
 window.addEventListener('DOMContentLoaded', () => {
   new TitanGame();
 });

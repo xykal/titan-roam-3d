@@ -1,8 +1,8 @@
 export class HUD {
-  constructor(onSelectVehicle) {
+  constructor(onSelectVehicle, onToggleQuality) {
     this.onSelectVehicle = onSelectVehicle;
+    this.onToggleQuality = onToggleQuality;
 
-    // DOM Elements
     this.speedText = document.getElementById('hud-speed');
     this.gearText = document.getElementById('hud-gear');
     this.rpmBar = document.getElementById('hud-rpm-fill');
@@ -12,14 +12,16 @@ export class HUD {
     this.stuntTitle = document.getElementById('hud-stunt-title');
     this.stuntDesc = document.getElementById('hud-stunt-desc');
     this.radarCanvas = document.getElementById('hud-radar');
+    this.qualityBadge = document.getElementById('quality-badge');
 
     this.garageModal = document.getElementById('garage-modal');
-    this.audioIcon = document.getElementById('audio-icon');
+    this.audioIconContainer = document.getElementById('audio-icon');
 
     this.radarCtx = this.radarCanvas ? this.radarCanvas.getContext('2d') : null;
     this.tickerTimeout = null;
 
     this.initGarageModal();
+    this.initQualityButton();
   }
 
   initGarageModal() {
@@ -37,6 +39,21 @@ export class HUD {
     const closeBtn = document.getElementById('btn-close-garage');
     if (closeBtn) {
       closeBtn.addEventListener('click', () => this.closeGarage());
+    }
+  }
+
+  initQualityButton() {
+    const btnQuality = document.getElementById('btn-quality');
+    if (btnQuality) {
+      btnQuality.addEventListener('click', () => {
+        if (this.onToggleQuality) this.onToggleQuality();
+      });
+    }
+  }
+
+  updateQualityBadge(quality) {
+    if (this.qualityBadge) {
+      this.qualityBadge.textContent = quality === 'HIGH' ? 'ULTRA' : '60 FPS';
     }
   }
 
@@ -62,8 +79,22 @@ export class HUD {
   }
 
   updateAudioIcon(isMuted) {
-    if (this.audioIcon) {
-      this.audioIcon.textContent = isMuted ? '🔇' : '🔊';
+    if (this.audioIconContainer) {
+      if (isMuted) {
+        this.audioIconContainer.innerHTML = `
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="1" y1="1" x2="23" y2="23"/>
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          </svg>
+        `;
+      } else {
+        this.audioIconContainer.innerHTML = `
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          </svg>
+        `;
+      }
     }
   }
 
@@ -74,17 +105,14 @@ export class HUD {
     const isReverse = controller.brake > 0 && speed < 1;
     const nitroPct = (controller.nitroFuel / controller.maxNitro) * 100;
 
-    // 1. Digital Speedometer
     if (this.speedText) {
       this.speedText.textContent = Math.round(speed);
     }
 
-    // 2. Gear
     if (this.gearText) {
       this.gearText.textContent = isReverse ? 'R' : gear;
     }
 
-    // 3. RPM Bar
     if (this.rpmBar) {
       const rpmPct = Math.min(Math.max((rpm - 800) / 7200, 0), 1) * 100;
       this.rpmBar.style.width = `${rpmPct}%`;
@@ -95,19 +123,16 @@ export class HUD {
       }
     }
 
-    // 4. Nitro Bar
     if (this.nitroBar) {
       this.nitroBar.style.width = `${nitroPct}%`;
     }
 
-    // 5. Stars Count
     if (this.starCountText) {
       const collected = terrainManager.getCollectedCount();
       const total = terrainManager.collectibles.length;
       this.starCountText.textContent = `${collected} / ${total}`;
     }
 
-    // 6. Radar Minimap
     this.drawRadar(controller.pos, controller.quat, terrainManager);
   }
 
@@ -117,11 +142,10 @@ export class HUD {
     const w = this.radarCanvas.width;
     const h = this.radarCanvas.height;
     const center = w / 2;
-    const zoom = 0.22; // Radar scale
+    const zoom = 0.22;
 
     ctx.clearRect(0, 0, w, h);
 
-    // Radar background circle & grid
     ctx.save();
     ctx.beginPath();
     ctx.arc(center, center, center - 2, 0, Math.PI * 2);
@@ -131,15 +155,13 @@ export class HUD {
     ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // Radar range rings
     ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(center, center, center * 0.35, 0, Math.PI * 2);
-    ctx.arc(center, center, center * 0.7, 0, Math.PI * 2);
+    ctx.arc(center, center, center * 0.4, 0, Math.PI * 2);
+    ctx.arc(center, center, center * 0.75, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Crosshairs
     ctx.beginPath();
     ctx.moveTo(center, 4);
     ctx.lineTo(center, h - 4);
@@ -147,7 +169,7 @@ export class HUD {
     ctx.lineTo(w - 4, center);
     ctx.stroke();
 
-    // Draw Collectibles / Stars on radar
+    // Stars on radar
     terrainManager.collectibles.forEach(star => {
       if (!star.collected) {
         const dx = (star.pos.x - carPos.x) * zoom;
@@ -155,17 +177,14 @@ export class HUD {
         const radDist = Math.hypot(dx, dz);
         if (radDist < center - 6) {
           ctx.fillStyle = '#ffd000';
-          ctx.shadowColor = '#ffd000';
-          ctx.shadowBlur = 6;
           ctx.beginPath();
           ctx.arc(center + dx, center + dz, 3.5, 0, Math.PI * 2);
           ctx.fill();
-          ctx.shadowBlur = 0;
         }
       }
     });
 
-    // Draw Speed Traps on radar
+    // Speed traps on radar
     terrainManager.speedCameras.forEach(cam => {
       const dx = (cam.pos.x - carPos.x) * zoom;
       const dz = (cam.pos.z - carPos.z) * zoom;
@@ -175,7 +194,7 @@ export class HUD {
       }
     });
 
-    // Draw Player Arrow in center
+    // Player arrow
     const carRotY = Math.atan2(
       2 * (carQuat.y * carQuat.w - carQuat.x * carQuat.z),
       1 - 2 * (carQuat.y * carQuat.y + carQuat.z * carQuat.z)
@@ -186,8 +205,6 @@ export class HUD {
     ctx.rotate(-carRotY);
 
     ctx.fillStyle = '#00ff88';
-    ctx.shadowColor = '#00ff88';
-    ctx.shadowBlur = 8;
     ctx.beginPath();
     ctx.moveTo(0, -7);
     ctx.lineTo(5, 5);
@@ -195,7 +212,6 @@ export class HUD {
     ctx.lineTo(-5, 5);
     ctx.closePath();
     ctx.fill();
-    ctx.shadowBlur = 0;
 
     ctx.restore();
     ctx.restore();
