@@ -12,8 +12,7 @@ export class MobileControls {
     };
 
     this.keys = {};
-    this.isDraggingSteer = false;
-    this.steerStartX = 0;
+    this.activePointers = new Map();
 
     this.initKeyboard();
     this.initTouchUI();
@@ -36,39 +35,27 @@ export class MobileControls {
     window.addEventListener('orientationchange', checkOrientation);
     checkOrientation();
 
-    if (btnLandscape) {
-      btnLandscape.addEventListener('click', async () => {
-        try {
-          if (!document.fullscreenElement) {
-            if (document.documentElement.requestFullscreen) {
-              await document.documentElement.requestFullscreen();
-            } else if (document.documentElement.webkitRequestFullscreen) {
-              await document.documentElement.webkitRequestFullscreen();
-            }
+    const requestLandscapeAndFullscreen = async () => {
+      try {
+        if (!document.fullscreenElement) {
+          if (document.documentElement.requestFullscreen) {
+            await document.documentElement.requestFullscreen();
+          } else if (document.documentElement.webkitRequestFullscreen) {
+            await document.documentElement.webkitRequestFullscreen();
           }
-          if (screen.orientation && screen.orientation.lock) {
-            await screen.orientation.lock('landscape').catch(() => {});
-          }
-        } catch (e) {}
-        checkOrientation();
-      });
-    }
-
-    if (overlay) {
-      overlay.addEventListener('click', async (e) => {
-        if (e.target !== btnLandscape && !btnLandscape.contains(e.target)) {
-          try {
-            if (!document.fullscreenElement) {
-              if (document.documentElement.requestFullscreen) {
-                await document.documentElement.requestFullscreen();
-              }
-            }
-            if (screen.orientation && screen.orientation.lock) {
-              await screen.orientation.lock('landscape').catch(() => {});
-            }
-          } catch (e) {}
         }
-      });
+        if (screen.orientation && screen.orientation.lock) {
+          await screen.orientation.lock('landscape').catch(() => {});
+        }
+      } catch (e) {}
+      checkOrientation();
+    };
+
+    if (btnLandscape) {
+      btnLandscape.addEventListener('click', requestLandscapeAndFullscreen);
+    }
+    if (overlay) {
+      overlay.addEventListener('click', requestLandscapeAndFullscreen);
     }
   }
 
@@ -85,26 +72,9 @@ export class MobileControls {
     const knob = document.getElementById('touch-steer-knob');
     if (!zone || !knob) return;
 
-    let activeTouchId = null;
+    let steerPointerId = null;
 
-    const handleStart = (clientX, touchId = null) => {
-      this.isDraggingSteer = true;
-      activeTouchId = touchId;
-      const rect = zone.getBoundingClientRect();
-      const centerX = rect.left + rect.width / 2;
-      const maxDelta = rect.width / 2 - 20;
-
-      const deltaX = Math.max(-maxDelta, Math.min(maxDelta, clientX - centerX));
-      const steerVal = deltaX / maxDelta;
-
-      this.inputs.steer = steerVal;
-      knob.style.transform = `translateX(${deltaX}px) rotate(${steerVal * 45}deg)`;
-      this.triggerHaptic([15]);
-      this.emit();
-    };
-
-    const handleMove = (clientX) => {
-      if (!this.isDraggingSteer) return;
+    const updateSteer = (clientX) => {
       const rect = zone.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const maxDelta = rect.width / 2 - 20;
@@ -117,34 +87,32 @@ export class MobileControls {
       this.emit();
     };
 
-    const handleEnd = () => {
-      this.isDraggingSteer = false;
-      activeTouchId = null;
-      this.inputs.steer = 0;
-      knob.style.transform = `translateX(0px) rotate(0deg)`;
-      this.emit();
-    };
-
-    // Pointer / Touch events
     zone.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      handleStart(e.clientX);
+      steerPointerId = e.pointerId;
+      try { zone.setPointerCapture(e.pointerId); } catch (_) {}
+      updateSteer(e.clientX);
+      this.triggerHaptic([15]);
     });
 
-    window.addEventListener('pointermove', (e) => {
-      if (this.isDraggingSteer) {
+    zone.addEventListener('pointermove', (e) => {
+      if (steerPointerId === e.pointerId) {
         e.preventDefault();
-        handleMove(e.clientX);
+        updateSteer(e.clientX);
       }
     });
 
-    window.addEventListener('pointerup', () => {
-      if (this.isDraggingSteer) handleEnd();
-    });
+    const resetSteer = (e) => {
+      if (steerPointerId === e.pointerId) {
+        steerPointerId = null;
+        this.inputs.steer = 0;
+        knob.style.transform = `translateX(0px) rotate(0deg)`;
+        this.emit();
+      }
+    };
 
-    window.addEventListener('pointercancel', () => {
-      if (this.isDraggingSteer) handleEnd();
-    });
+    zone.addEventListener('pointerup', resetSteer);
+    zone.addEventListener('pointercancel', resetSteer);
   }
 
   initTouchUI() {
@@ -157,23 +125,32 @@ export class MobileControls {
 
     const bindButton = (el, onStart, onEnd, haptic = [20]) => {
       if (!el) return;
+
+      let boundPointerId = null;
+
       const start = (e) => {
         e.preventDefault();
-        this.triggerHaptic(haptic);
+        boundPointerId = e.pointerId;
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
         el.classList.add('active');
+        this.triggerHaptic(haptic);
         onStart();
         this.emit();
       };
+
       const end = (e) => {
-        e.preventDefault();
-        el.classList.remove('active');
-        onEnd();
-        this.emit();
+        if (boundPointerId === e.pointerId || boundPointerId === null) {
+          e.preventDefault();
+          boundPointerId = null;
+          el.classList.remove('active');
+          onEnd();
+          this.emit();
+        }
       };
+
       el.addEventListener('pointerdown', start);
       el.addEventListener('pointerup', end);
       el.addEventListener('pointercancel', end);
-      el.addEventListener('pointerleave', end);
     };
 
     bindButton(
@@ -273,6 +250,7 @@ export class MobileControls {
     if (this.keys['Space']) kHandbrake = true;
     if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) kNitro = true;
 
+    // Apply keyboard only when non-zero or override
     if (kThrottle || kBrake || kSteer !== 0 || kHandbrake || kNitro) {
       this.inputs.throttle = kThrottle;
       this.inputs.brake = kBrake;
