@@ -15,7 +15,7 @@ class TitanGame {
     this.camModeIndex = 0;
     this.cameraModes = ['CHASE', 'ACTION', 'HOOD', 'ORBIT'];
     this.isPaused = false;
-    this.graphicsQuality = 'HIGH'; // 'HIGH' or 'FAST'
+    this.graphicsQuality = 'HIGH';
 
     this.initGraphics();
     this.soundEngine = new SoundEngine();
@@ -48,7 +48,6 @@ class TitanGame {
     window.addEventListener('orientationchange', () => this.checkOrientationState());
     this.checkOrientationState();
 
-    // Instant smooth loader dismiss
     const loader = document.getElementById('loading-screen');
     if (loader) {
       requestAnimationFrame(() => {
@@ -66,7 +65,6 @@ class TitanGame {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.3, 1000);
 
-    // Optimized WebGLRenderer for mobile performance
     this.renderer = new THREE.WebGLRenderer({
       antialias: window.innerWidth > 900,
       powerPreference: 'high-performance',
@@ -252,7 +250,9 @@ class TitanGame {
       this.soundEngine,
       this.particleSystem,
       (event, data) => {
-        if (event === 'STAR_COLLECTED') {
+        if (event === 'CHECKPOINT_CLEARED') {
+          this.hud.showStuntAlert(`CHECKPOINT ${data.next}/${data.total}`, data.label, 200);
+        } else if (event === 'STAR_COLLECTED') {
           this.hud.showStuntAlert('GOLD STAR COLLECTED!', `STARS: ${data.count} / ${data.total}`, 500);
         } else if (event === 'SPEED_TRAP') {
           this.hud.showStuntAlert(data.name, `RADAR FLASH: ${data.speed} KM/H (BEST: ${data.record})`);
@@ -260,6 +260,9 @@ class TitanGame {
         } else if (event === 'TNT_EXPLODED') {
           this.hud.showStuntAlert('TNT BLAST!', 'EXPLOSIVE HIT +250 PTS', 250);
           this.camShake = 0.5;
+        } else if (event === 'PIN_STRIKE') {
+          this.hud.showStuntAlert('MONSTER STRIKE!', '+150 PTS', 150);
+          this.camShake = 0.3;
         } else if (event === 'CRATE_SMASHED') {
           this.hud.showStuntAlert('CRUSHED CRATE!', '+50 PTS', 50);
         }

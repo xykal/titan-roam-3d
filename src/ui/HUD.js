@@ -169,6 +169,22 @@ export class HUD {
     ctx.lineTo(w - 4, center);
     ctx.stroke();
 
+    // Active Checkpoint on radar (pulsing cyan/green circle)
+    if (terrainManager.checkpoints.length > 0) {
+      const activeCp = terrainManager.checkpoints[terrainManager.activeCheckpointIndex];
+      const dx = (activeCp.pos.x - carPos.x) * zoom;
+      const dz = (activeCp.pos.z - carPos.z) * zoom;
+      if (Math.hypot(dx, dz) < center - 6) {
+        ctx.fillStyle = '#00ff88';
+        ctx.shadowColor = '#00ff88';
+        ctx.shadowBlur = 8;
+        ctx.beginPath();
+        ctx.arc(center + dx, center + dz, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
     // Stars on radar
     terrainManager.collectibles.forEach(star => {
       if (!star.collected) {

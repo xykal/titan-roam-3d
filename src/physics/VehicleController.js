@@ -10,23 +10,23 @@ export class VehicleController {
     // Rigid body state
     this.pos = new THREE.Vector3(0, 3, 0);
     this.vel = new THREE.Vector3(0, 0, 0);
-    this.rot = new THREE.Euler(0, 0, 0, 'YXZ');
     this.quat = new THREE.Quaternion();
     this.angularVel = new THREE.Vector3(0, 0, 0);
 
     // Inputs
-    this.throttle = 0;   // 0 to 1
-    this.brake = 0;      // 0 to 1
-    this.steer = 0;      // -1 to +1 (smooth analog or digital)
+    this.throttle = 0;
+    this.brake = 0;
+    this.steer = 0;
     this.handbrake = false;
     this.nitro = false;
 
     // Vehicle Config
     this.config = vehicleData.config;
-    this.mass = this.config.mass || 2200;
+    this.mass = this.config.mass || 2400;
     this.suspensionRestLength = 1.05;
-    this.suspensionStiffness = 42000;
-    this.suspensionDamping = 3800;
+    this.suspensionStiffness = 45000;
+    this.suspensionDamping = 4000;
+    this.antiRollStiffness = 18000; // Anti-roll sway bar
     this.dragCoeff = 0.42;
 
     // Engine & Gear
@@ -36,21 +36,25 @@ export class VehicleController {
     this.reverseRatio = 3.4;
     this.finalDrive = 4.1;
 
-    // Nitro tank
+    // Nitro
     this.nitroFuel = 100;
     this.maxNitro = 100;
 
-    // Stunts
+    // Brake Disc Heat
+    this.brakeHeat = 0;
+
+    // Stunts & Tricks
     this.isAirborne = false;
     this.airTime = 0;
     this.jumpStartPos = new THREE.Vector3();
     this.driftScore = 0;
     this.totalStuntPoints = 0;
+    this.airRotations = { pitch: 0, roll: 0, yaw: 0 };
 
-    // Set initial position on ground with wheels flush
+    // Initial position on ground
     const groundH = this.terrain.getHeightAt(0, 0);
     const eqComp = (this.mass * 9.81 / this.vehicle.wheels.length) / this.suspensionStiffness;
-    const initialH = groundH + this.vehicle.wheels[0].radius + (this.suspensionRestLength - eqComp) + 0.2;
+    const initialH = groundH + this.vehicle.wheels[0].radius + (this.suspensionRestLength - eqComp) + 0.15;
     this.pos.set(0, initialH, 0);
     this.vehicle.root.position.copy(this.pos);
   }
@@ -66,7 +70,7 @@ export class VehicleController {
   reset(x = 0, z = 0) {
     const groundH = this.terrain.getHeightAt(x, z);
     const eqComp = (this.mass * 9.81 / this.vehicle.wheels.length) / this.suspensionStiffness;
-    const initialH = groundH + this.vehicle.wheels[0].radius + (this.suspensionRestLength - eqComp) + 0.2;
+    const initialH = groundH + this.vehicle.wheels[0].radius + (this.suspensionRestLength - eqComp) + 0.15;
 
     this.pos.set(x, initialH, z);
     this.vel.set(0, 0, 0);
@@ -101,7 +105,7 @@ export class VehicleController {
     let nitroThrust = 0;
     if (this.nitro && this.nitroFuel > 0) {
       this.nitroFuel = Math.max(0, this.nitroFuel - dt * 25);
-      nitroThrust = 18000;
+      nitroThrust = 19000;
 
       const exhaustL = this.vehicle.exhaustLeft.clone().applyQuaternion(this.quat).add(this.pos);
       const exhaustR = this.vehicle.exhaustRight.clone().applyQuaternion(this.quat).add(this.pos);
@@ -110,7 +114,7 @@ export class VehicleController {
       this.nitroFuel = Math.min(this.maxNitro, this.nitroFuel + dt * 10);
     }
 
-    // Engine & Gear
+    // Engine & Gear simulation
     let effectiveRatio = this.gearRatios[this.currentGear - 1] * this.finalDrive;
     if (this.brake > 0 && forwardSpeed < 0.5) {
       effectiveRatio = -this.reverseRatio * this.finalDrive;
@@ -118,7 +122,7 @@ export class VehicleController {
 
     let targetRpm = Math.min(7800, 850 + Math.abs(forwardSpeed) * 48 * (effectiveRatio / 4.0));
     if (this.throttle > 0 && Math.abs(forwardSpeed) < 3) {
-      targetRpm = 850 + 4600 * this.throttle;
+      targetRpm = 850 + 4800 * this.throttle;
     }
     this.rpm = THREE.MathUtils.lerp(this.rpm, targetRpm, dt * 12);
 
@@ -131,57 +135,91 @@ export class VehicleController {
 
     this.sound.updateEngine(this.rpm, this.throttle, speedKmh, this.nitro && this.nitroFuel > 0);
 
+    // Dynamic Brake Heat Glow
+    if (this.brake > 0.5 && speedKmh > 30) {
+      this.brakeHeat = Math.min(1.0, this.brakeHeat + dt * 0.8);
+    } else {
+      this.brakeHeat = Math.max(0, this.brakeHeat - dt * 0.3);
+    }
+
+    if (this.vehicle.animatedParts.brakeDiscs) {
+      this.vehicle.animatedParts.brakeDiscs.forEach(disc => {
+        if (disc.material) {
+          disc.material.emissiveIntensity = this.brakeHeat * 1.5;
+        }
+      });
+    }
+
+    // Mechanical animations: Steering wheel, Blower butterflies, Engine pulley
+    const anim = this.vehicle.animatedParts;
+    if (anim.steeringWheel) {
+      anim.steeringWheel.rotation.z = -this.steer * Math.PI * 0.8;
+    }
+    if (anim.blowerButterflies) {
+      // Butterflies rotate open with throttle
+      anim.blowerButterflies.rotation.x = this.throttle * (Math.PI / 2.2);
+    }
+    if (anim.enginePulley) {
+      anim.enginePulley.rotation.z += (this.rpm / 60) * Math.PI * 2 * dt;
+    }
+
     // --- SUSPENSION & WHEEL GROUND CONTACT PHYSICS ---
     let groundedWheels = 0;
     const totalForces = new THREE.Vector3(0, -9.81 * this.mass, 0); // Gravity
     const totalTorque = new THREE.Vector3(0, 0, 0);
 
-    // Speed-sensitive steering
     const speedFactor = Math.max(0.45, 1.0 - (speedKmh / 220) * 0.55);
     const steerAngle = -this.steer * this.config.steerAngle * speedFactor;
 
+    const compressions = new Array(this.vehicle.wheels.length).fill(0);
+
+    // Pass 1: Compute wheel suspension compression
+    for (let i = 0; i < this.vehicle.wheels.length; i++) {
+      const wheel = this.vehicle.wheels[i];
+      const mountWorldPos = wheel.offset.clone().applyQuaternion(this.quat).add(this.pos);
+      const groundY = this.terrain.getHeightAt(mountWorldPos.x, mountWorldPos.z);
+      const wheelCenterGroundY = groundY + wheel.radius;
+      const rayDist = mountWorldPos.y - wheelCenterGroundY;
+
+      if (rayDist < this.suspensionRestLength) {
+        compressions[i] = THREE.MathUtils.clamp(this.suspensionRestLength - rayDist, 0, this.suspensionRestLength);
+      }
+    }
+
+    // Anti-Roll Bar calculation (Front Left vs Right, Rear Left vs Right)
+    const frontAntiRoll = (compressions[0] - compressions[1]) * this.antiRollStiffness;
+    const rearAntiRoll = (compressions[2] - compressions[3]) * this.antiRollStiffness;
+
+    // Pass 2: Apply suspension & tire forces
     for (let i = 0; i < this.vehicle.wheels.length; i++) {
       const wheel = this.vehicle.wheels[i];
       const susp = this.vehicle.suspensions[i];
-
-      // World position of suspension upper mount
       const mountWorldPos = wheel.offset.clone().applyQuaternion(this.quat).add(this.pos);
-
-      // Ground height & normal under this specific wheel
       const groundY = this.terrain.getHeightAt(mountWorldPos.x, mountWorldPos.z);
       const groundNormal = this.terrain.getNormalAt(mountWorldPos.x, mountWorldPos.z);
-
-      // Contact height of wheel center when tire rests on ground
       const wheelCenterGroundY = groundY + wheel.radius;
 
-      // Distance from suspension mount to wheel center on ground
-      const rayDist = mountWorldPos.y - wheelCenterGroundY;
+      const compression = compressions[i];
+      const onGround = compression > 0;
 
-      let compression = 0;
-      let onGround = false;
+      if (onGround) groundedWheels++;
 
-      if (rayDist < this.suspensionRestLength) {
-        compression = THREE.MathUtils.clamp(this.suspensionRestLength - rayDist, 0, this.suspensionRestLength);
-        onGround = true;
-        groundedWheels++;
-      }
-
-      // Wheel local Y position: Flush with ground
+      // Wheel local Y position: Flush with terrain surface
       let targetLocalY = wheel.offset.y;
       if (onGround) {
-        // Position wheel center precisely at wheelCenterGroundY in world space
         targetLocalY = (wheelCenterGroundY - this.pos.y);
       } else {
-        // Hanging in air
         targetLocalY = wheel.offset.y - (this.suspensionRestLength * 0.85);
       }
 
-      wheel.hub.position.y = THREE.MathUtils.lerp(wheel.hub.position.y, targetLocalY, dt * 30);
+      wheel.hub.position.y = THREE.MathUtils.lerp(wheel.hub.position.y, targetLocalY, dt * 32);
 
-      // Spring coil visual compression
+      // Spring compression visual
       const springFactor = onGround ? Math.max(0.35, 1.0 - (compression / this.suspensionRestLength) * 0.65) : 1.0;
-      susp.spring.scale.y = springFactor;
-      susp.piston.position.y = (wheel.hub.position.y - wheel.offset.y) * 0.5;
+      if (susp.spring1) susp.spring1.scale.y = springFactor;
+      if (susp.spring2) susp.spring2.scale.y = springFactor;
+      if (susp.piston1) susp.piston1.position.y = (wheel.hub.position.y - wheel.offset.y) * 0.5;
+      if (susp.piston2) susp.piston2.position.y = (wheel.hub.position.y - wheel.offset.y) * 0.5;
 
       // Wheel Steering
       if (wheel.isFront) {
@@ -194,14 +232,20 @@ export class VehicleController {
       const spinSpeed = forwardSpeed / wheel.radius;
       wheel.mesh.rotation.x += spinSpeed * dt;
 
-      // Physics calculation when in contact with ground
+      // Contact forces
       if (onGround) {
         const relPos = mountWorldPos.clone().sub(this.pos);
         const pointVel = this.vel.clone().add(this.angularVel.clone().cross(relPos));
 
-        // 1. Suspension Spring-Damper Force
+        // 1. Suspension Spring Force + Anti-Roll Bar Force
         const compVel = -pointVel.dot(up);
-        const springForceMag = Math.max(0, this.suspensionStiffness * compression + this.suspensionDamping * compVel);
+        let arbForce = 0;
+        if (i === 0) arbForce = -frontAntiRoll;
+        else if (i === 1) arbForce = frontAntiRoll;
+        else if (i === 2) arbForce = -rearAntiRoll;
+        else if (i === 3) arbForce = rearAntiRoll;
+
+        const springForceMag = Math.max(0, this.suspensionStiffness * compression + this.suspensionDamping * compVel + arbForce);
         const normalForce = groundNormal.clone().multiplyScalar(springForceMag);
 
         totalForces.add(normalForce);
@@ -217,9 +261,9 @@ export class VehicleController {
           driveForceMag = (this.throttle * (this.config.torque / numDriveWheels) + nitroThrust / numDriveWheels) * (forwardSpeed < 1 ? 1.4 : 1.0);
         } else if (this.brake > 0) {
           if (forwardSpeed > 0.6) {
-            driveForceMag = -this.brake * 4200;
+            driveForceMag = -this.brake * 4400;
           } else {
-            driveForceMag = -this.brake * 2600;
+            driveForceMag = -this.brake * 2800;
           }
         }
 
@@ -234,7 +278,7 @@ export class VehicleController {
         const latSlip = pointVel.dot(tireRight);
         let grip = 0.95;
         if (this.handbrake && !wheel.isFront) {
-          grip = 0.22; // Drift slide
+          grip = 0.22;
         }
 
         const latForceMag = -latSlip * this.mass * grip * 2.8;
@@ -262,20 +306,31 @@ export class VehicleController {
       }
     }
 
-    // --- AIRBORNE & STUNTS ---
+    // --- AIRBORNE & STUNTS (With In-Air Gyro Assist) ---
     if (groundedWheels === 0) {
       if (!this.isAirborne) {
         this.isAirborne = true;
         this.airTime = 0;
         this.jumpStartPos.copy(this.pos);
+        this.airRotations = { pitch: 0, roll: 0, yaw: 0 };
       }
       this.airTime += dt;
 
-      // Air pitch & roll control
-      const airPitch = (this.throttle - this.brake) * 2.8;
-      const airRoll = -this.steer * 2.8;
+      // Player in-air control
+      const airPitch = (this.throttle - this.brake) * 3.0;
+      const airRoll = -this.steer * 3.0;
       this.angularVel.x += airPitch * dt;
       this.angularVel.z += airRoll * dt;
+
+      // In-air Gyro Upright Assist (Prevents accidental nose-dives when player is neutral)
+      if (this.throttle === 0 && this.brake === 0 && this.steer === 0) {
+        const worldUp = new THREE.Vector3(0, 1, 0);
+        const tiltAngle = up.angleTo(worldUp);
+        if (tiltAngle > 0.05 && tiltAngle < Math.PI * 0.45) {
+          const correctionAxis = new THREE.Vector3().crossVectors(up, worldUp).normalize();
+          this.angularVel.addScaledVector(correctionAxis, tiltAngle * 3.5 * dt);
+        }
+      }
     } else {
       if (this.isAirborne) {
         const jumpDist = this.pos.distanceTo(this.jumpStartPos);
@@ -307,7 +362,7 @@ export class VehicleController {
       }
     }
 
-    // Drag & Damping
+    // Aerodynamic Drag & Angular Damping
     const speed = this.vel.length();
     const dragForce = this.vel.clone().multiplyScalar(-0.5 * 1.225 * this.dragCoeff * speed);
     totalForces.add(dragForce);

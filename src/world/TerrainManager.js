@@ -5,12 +5,17 @@ export class TerrainManager {
   constructor(scene) {
     this.scene = scene;
     this.worldSize = 1000;
-    this.segments = 110; // Optimized for silky smooth 60fps mobile WebGL
+    this.segments = 110;
     this.collectibles = [];
     this.speedCameras = [];
     this.destructibles = [];
     this.giantBalls = [];
     this.stuntRamps = [];
+    this.checkpoints = [];
+    this.activeCheckpointIndex = 0;
+    this.timeTrialActive = false;
+    this.timeTrialTimer = 0;
+    this.bestLapTime = 0;
 
     this.crateTex = TextureGenerator.createCrateTexture();
     this.barrelTex = TextureGenerator.createBarrelTexture();
@@ -24,6 +29,7 @@ export class TerrainManager {
     this.buildCollectibles();
     this.buildSpeedTraps();
     this.buildDestructibles();
+    this.buildCheckpoints();
   }
 
   getTerrainHeight(x, z) {
@@ -181,7 +187,6 @@ export class TerrainManager {
     this.sunMesh.position.set(280, 260, 220);
     this.scene.add(this.sunMesh);
 
-    // Optimized Directional Light for mobile
     this.sunLight = new THREE.DirectionalLight(0xfffaed, 2.0);
     this.sunLight.position.set(240, 220, 200);
     this.sunLight.castShadow = true;
@@ -242,6 +247,53 @@ export class TerrainManager {
 
     this.createGiantBall(15, 5, 20, 4.5, 0xffffff);
     this.createGiantBall(-20, 5, -20, 4.0, 0xffaa00);
+
+    // Giant Bowling Pins at Landing Zone
+    this.createBowlingPins(0, 0, 95);
+  }
+
+  createBowlingPins(x, y, z) {
+    const groundH = this.getHeightAt(x, z);
+    const pinMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+    const pinRedMat = new THREE.MeshBasicMaterial({ color: 0xff0033 });
+
+    const rows = 3;
+    let pinIndex = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c <= r; c++) {
+        const px = x + (c - r * 0.5) * 3.5;
+        const pz = z + r * 3.5;
+        const py = this.getHeightAt(px, pz);
+
+        const group = new THREE.Group();
+        group.position.set(px, py + 1.8, pz);
+
+        // Pin Body
+        const pinGeo = new THREE.CylinderGeometry(0.5, 0.9, 3.6, 10);
+        const pinMesh = new THREE.Mesh(pinGeo, pinMat);
+        group.add(pinMesh);
+
+        // Pin Red Neck Ring
+        const ringGeo = new THREE.CylinderGeometry(0.52, 0.52, 0.35, 10);
+        const ringMesh = new THREE.Mesh(ringGeo, pinRedMat);
+        ringMesh.position.y = 0.9;
+        group.add(ringMesh);
+
+        this.scene.add(group);
+
+        this.destructibles.push({
+          type: 'bowling_pin',
+          mesh: group,
+          pos: group.position.clone(),
+          vel: new THREE.Vector3(),
+          rotVel: new THREE.Vector3(),
+          destroyed: false,
+          radius: 1.2,
+        });
+
+        pinIndex++;
+      }
+    }
   }
 
   createLaunchRamp(x, yBase, z, width, height, length, rotationY, matMain, matTrim) {
@@ -498,6 +550,47 @@ export class TerrainManager {
     });
   }
 
+  buildCheckpoints() {
+    // 8 Holographic Neon Checkpoint Gates around the world
+    const gateCoords = [
+      { x: 0, z: 25, label: 'START' },
+      { x: 0, z: 75, label: 'MEGA JUMP' },
+      { x: 120, z: -80, label: 'DUNE HIGHWAY' },
+      { x: 180, z: 120, label: 'CANYON ARCH' },
+      { x: 0, z: 200, label: 'CROSSROAD' },
+      { x: -160, z: 160, label: 'OASIS DRIFT' },
+      { x: -180, z: -140, label: 'MOUNTAIN ASCENT' },
+      { x: 0, z: -40, label: 'FINISH ARENA' },
+    ];
+
+    gateCoords.forEach((coord, idx) => {
+      const y = this.getHeightAt(coord.x, coord.z);
+      const group = new THREE.Group();
+      group.position.set(coord.x, y + 4.5, coord.z);
+
+      // Holographic Ring
+      const ringGeo = new THREE.TorusGeometry(5.5, 0.3, 8, 16);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: idx === 0 ? 0x00ff88 : 0x00f0ff,
+        transparent: true,
+        opacity: 0.85,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      group.add(ring);
+
+      this.scene.add(group);
+
+      this.checkpoints.push({
+        index: idx,
+        label: coord.label,
+        group,
+        ring,
+        ringMat,
+        pos: new THREE.Vector3(coord.x, y + 4.5, coord.z),
+      });
+    });
+  }
+
   buildSpeedTraps() {
     const speedCameraLocations = [
       { x: 0, z: 120, name: 'ARENA DRAG STRIP' },
@@ -601,6 +694,29 @@ export class TerrainManager {
   update(dt, carPos, carVel, soundEngine, particleSystem, onEvent) {
     const time = performance.now() * 0.002;
 
+    // Checkpoint Race Progress
+    if (this.checkpoints.length > 0) {
+      const activeCp = this.checkpoints[this.activeCheckpointIndex];
+      activeCp.group.rotation.y += dt * 1.5;
+      activeCp.ringMat.color.setHex(0x00ff88);
+
+      const distToCp = carPos.distanceTo(activeCp.pos);
+      if (distToCp < 7.5) {
+        soundEngine.playCollectStar();
+        particleSystem.spawnSparks(activeCp.pos, 25);
+
+        this.activeCheckpointIndex = (this.activeCheckpointIndex + 1) % this.checkpoints.length;
+        if (onEvent) {
+          onEvent('CHECKPOINT_CLEARED', {
+            label: activeCp.label,
+            next: this.activeCheckpointIndex + 1,
+            total: this.checkpoints.length,
+          });
+        }
+      }
+    }
+
+    // Stars
     this.collectibles.forEach(star => {
       if (!star.collected) {
         star.mesh.rotation.y += dt * 2.0;
@@ -618,6 +734,7 @@ export class TerrainManager {
       }
     });
 
+    // Speed Cameras
     this.speedCameras.forEach(cam => {
       const dist = carPos.distanceTo(cam.pos);
       if (dist < 9.0) {
@@ -636,6 +753,7 @@ export class TerrainManager {
       }
     });
 
+    // Destructibles physics
     this.destructibles.forEach(item => {
       if (item.destroyed) {
         item.vel.y -= 20 * dt;
@@ -662,6 +780,10 @@ export class TerrainManager {
           soundEngine.playExplosion();
           particleSystem.spawnExplosion(item.mesh.position);
           if (onEvent) onEvent('TNT_EXPLODED', { pos: item.mesh.position });
+        } else if (item.type === 'bowling_pin') {
+          soundEngine.playImpact(1.4);
+          particleSystem.spawnSparks(item.mesh.position, 18);
+          if (onEvent) onEvent('PIN_STRIKE', {});
         } else {
           soundEngine.playImpact(1.2);
           particleSystem.spawnSparks(item.mesh.position, 15);
@@ -670,6 +792,7 @@ export class TerrainManager {
       }
     });
 
+    // Giant balls
     this.giantBalls.forEach(ball => {
       const dist = carPos.distanceTo(ball.mesh.position);
       if (dist < ball.radius + 2.5) {
